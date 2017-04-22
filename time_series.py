@@ -71,7 +71,7 @@ with open('AllVar.phot') as f:
 			plt.gca().invert_yaxis()
 			plt.xlabel('MJD')
 			plt.ylabel('Mag')
-			plt.scatter(series['col2'], series['col3'], marker = 'o', color = 'black')
+			plt.errorbar(series['col2'], series['col3'], yerr = series['col4'], fmt = 'o')
 			plt.pause(2)
 			plots.append((key, series, Catalina_object))       # store it
 			#series.write('{0}{1}.fits'.format(key,Catalina_object))
