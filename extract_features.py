@@ -6,7 +6,6 @@ import math
 from statsmodels.tsa import stattools
 import matplotlib.pyplot as plt
 
-
 #np.max(plots[0][1]['col3'] magnitude
 
 class Features():
@@ -16,14 +15,11 @@ class Features():
         self.time = series['MJD'].as_matrix()
         self.flux = (10**(-self.magnitude*0.4)) * 363.1
         error = kwargs.pop('mag_err', None)
+        
         if error is not None:
         	self.mag_err=series['Mag_err'].as_matrix()
         
         self.features = dict()
-        
-        #plot original light curve    
-        #plt.scatter(self.time, self.magnitude, color = 'green')
-        #plt.pause(2)
         
         #mag_err outliers
         outlier_indices = np.where(self.mag_err > 1)
@@ -58,42 +54,42 @@ class Features():
         z_score = (self.magnitude - mean)/ std
 
         #Z-scores with an absolute value greater than 3 be labeled as potential outliers
-        lower = np.asarray(np.where(z_score < -3)[0])
-        higher = np.asarray(np.where(z_score > 3)[0])
-        #check for consecutive observations in outliers i.e. if neighbouring points for an outlier are also outliers, they probably signify a pattern
-        if len(lower) > 2:
-            first, length = self.longestConsecutive(lower)
-            while length > 2:
-                index = np.argwhere(lower == first)
-                indices = range(index, index + length)
-                lower = np.delete(lower, indices)
-                if len(lower) < 3:
-                    break
-                first, length = self.longestConsecutive(lower)
-        if len(higher) > 2:
-            first, length = self.longestConsecutive(higher)
-            while length > 2:
-                index = np.argwhere(higher == first)
-                indices = range(index, index + length)
-                higher = np.delete(higher, indices)
-                if len(higher) < 3:
-                    break
-                first, length = self.longestConsecutive(higher)
+        self.lower = np.asarray(np.where(z_score < -3)[0])
+        self.higher = np.asarray(np.where(z_score > 3)[0])
+        
+        self.lower = self.outliers(self.lower)
+        self.higher = self.outliers(self.higher)
+        
+        print self.lower, self.higher
+        plot = False
+        #if(len(self.lower) > 4 or len(self.higher) > 4):
+        #    plot = True
+        
+        #self.older_version_outliers()
+        
+        if plot == True:
+            #plot original light curve
+            plt.title('Original')   
+            plt.scatter(self.time, self.magnitude, color = 'red')
+            plt.pause(2)
+            plt.clf()
         
         #remove outliers
-        print lower, higher
-        self.mag_err = np.delete(self.mag_err, lower)
-        self.magnitude = np.delete(self.magnitude, lower)
-        self.time = np.delete(self.time, lower)
-        self.mag_err = np.delete(self.mag_err, higher)
-        self.magnitude = np.delete(self.magnitude, higher)
-        self.time = np.delete(self.time, higher)
+        self.mag_err = np.delete(self.mag_err, self.lower)
+        self.magnitude = np.delete(self.magnitude, self.lower)
+        self.time = np.delete(self.time, self.lower)
+        self.mag_err = np.delete(self.mag_err, self.higher)
+        self.magnitude = np.delete(self.magnitude, self.higher)
+        self.time = np.delete(self.time, self.higher)
         
-        #plot light curve without outliers
-        #plt.scatter(self.time, self.magnitude, color = 'green')
-        #plt.pause(2)
-        #plt.clf()
+        if plot == True:
+            #plot light curve without outliers
+            plt.title('Without_outliers')
+            plt.scatter(self.time, self.magnitude, color = 'green')
+            plt.pause(2)
+            plt.clf()
         
+        #light curve sample statistics
         self.n  = len(self.magnitude)
         self.mean = np.mean(self.magnitude)
         self.median = np.median(self.magnitude)
@@ -104,7 +100,9 @@ class Features():
         else:
             self.nlags = 100
 
-    def longestConsecutive(self, num):
+
+    @staticmethod
+    def longestConsecutive(num):
         maxrun, maxend = -1, -1
         rl = {}
         for x in num:
@@ -112,6 +110,59 @@ class Features():
             if run > maxrun:
                 maxend, maxrun = x, run
         return maxend-maxrun+1, maxrun
+
+    def outliers(self, potential_out):
+        pattern = 1;
+        indices = list()
+        two_pattern = list()
+        first = None
+        if(len(potential_out)>2):
+                for i in range(0,len(potential_out)-1):
+                    if(potential_out[i]+1 == potential_out[i+1]):
+                        if(pattern == 1):
+                            first = potential_out[i]
+                        pattern+=1;
+                    else:
+                        if(pattern > 2):
+                            index = np.argwhere(potential_out == first)
+                            indices.append(range(index, index + pattern))
+                        elif(pattern == 2):
+                            two_pattern.append(first, first+1)
+                        pattern = 1
+                        first = None
+        if(pattern > 2):
+            index = np.argwhere(potential_out == first)
+            indices.append(range(index, index + pattern))
+        elif(pattern == 2):
+            two_pattern.append(first, first+1)
+        flatten = lambda l: [item for sublist in l for item in sublist]
+        potential_out = np.delete(potential_out, flatten(indices))
+        if(len(two_pattern) >= 2):
+            potential_out = np.delete(potential_out, flatten(two_pattern))
+        return potential_out
+
+    
+    def older_version_outliers(self):
+        #check for consecutive observations in outliers i.e. if neighbouring points for an outlier are also outliers, they probably signify a pattern
+        if len(self.lower) > 2:
+            first, length = Features.longestConsecutive(self.lower)
+            while length > 2:
+                index = np.argwhere(self.lower == first)
+                indices = range(index, index + length)
+                self.lower = np.delete(self.lower, indices)
+                if len(self.lower) < 3:
+                    break
+                first, length = Features.longestConsecutive(self.lower)
+        if len(self.higher) > 2:
+            first, length = Features.longestConsecutive(self.higher)
+            while length > 2:
+                index = np.argwhere(self.higher == first)
+                indices = range(index, index + length)
+                self.higher = np.delete(self.higher, indices)
+                if len(self.higher) < 3:
+                    break
+                first, length = Features.longestConsecutive(self.higher)
+
 
     def call_all_features(self):
     	self.amplitude()
@@ -262,7 +313,7 @@ if __name__=='__main__':
     #print data_object
 	#fits.getdata('{0}{1}.fits'.format(key,series))
     #series  = ascii.read('sample_series/FILE1109065028988',delimiter = ',')
-    series = pd.read_csv('sample_series/FILE1109066003963',header=None, sep=',')
+    series = pd.read_csv('sample_series/FILE1109065032114',header=None, sep=',')
     series.columns = ['Numerical_ID','MJD','Mag','Mag_err','RA','DEC']
     f = Features(series, mag_err=True)
     f.call_all_features()
